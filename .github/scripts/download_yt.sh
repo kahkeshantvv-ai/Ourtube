@@ -16,15 +16,19 @@ mkdir -p "$BACKUP_DIR"
 mkdir -p videos
 > /tmp/video_info.txt
 
+echo "=========================================="
+echo "🎬 YouTube Video Downloader"
+echo "=========================================="
 echo "Total URLs to download: $TOTAL_URLS"
 echo "Quality: $QUALITY"
+echo "Site: YouTube"
 
 if [ -f "cookies.txt" ]; then
     COOKIE_FLAG="--cookies cookies.txt"
-    echo "✅ Using cookies for authentication"
+    echo "✅ Using cookies for YouTube authentication"
 else
     COOKIE_FLAG=""
-    echo "⚠️ No cookies found"
+    echo "⚠️ No cookies found for YouTube"
 fi
 
 # ── FUNCTIONS ────────────────────────────────
@@ -49,7 +53,7 @@ esac
 
 download_video() {
     local METHOD=$1; local URL=$2; local TMP_DIR=$3;
-    echo "Trying download method $METHOD..."
+    echo "Trying download method $METHOD for YouTube..."
     
     COMMON_FLAGS="--merge-output-format mp4 --write-thumbnail --convert-thumbnails jpg --no-cache-dir --output ${TMP_DIR}/%(title)s.%(ext)s --no-part --no-playlist --retries 10 --fragment-retries 10 --no-check-certificates --concurrent-fragments 4 --buffer-size 16K --http-chunk-size 5M --limit-rate 3M --sleep-requests 3 --sleep-interval 5 --max-sleep-interval 15 --throttled-rate 100K --progress --newline"
     
@@ -58,16 +62,75 @@ download_video() {
     fi
     
     case $METHOD in
-        1) yt-dlp $COOKIE_FLAG --proxy "socks5://127.0.0.1:1080" --format "$FORMAT" $COMMON_FLAGS --extractor-args "youtube:player_client=android,web" --extractor-args "youtube:skip=webpage" --js-runtimes deno --remote-components ejs:github --user-agent "Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36" --add-header "Accept-Language:en-US,en;q=0.9" "$URL";;
-        2) yt-dlp $COOKIE_FLAG --proxy "socks5://127.0.0.1:1080" --format "$FORMAT" $COMMON_FLAGS --extractor-args "youtube:player_client=ios" --js-runtimes deno --remote-components ejs:github --user-agent "com.google.ios.youtube/19.09.3 (iPhone14,3; U; CPU iOS 15_5 like Mac OS X)" --add-header "Accept-Language:en-US,en;q=0.9" "$URL";;
-        3) yt-dlp $COOKIE_FLAG --proxy "socks5://127.0.0.1:1080" --format "$FORMAT" $COMMON_FLAGS --extractor-args "youtube:player_client=tv_embedded" --js-runtimes deno --remote-components ejs:github --user-agent "Mozilla/5.0 (ChromiumStylePlatform) AppleWebKit/605.1.15 (KHTML, like Gecko) GoogleChrome/125.0.0.0 Safari/605.1.15" "$URL";;
-        4) yt-dlp $COOKIE_FLAG --proxy "socks5://127.0.0.1:1080" --format "$FORMAT" $COMMON_FLAGS --extractor-args "youtube:player_client=mweb" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "$URL";;
-        5) yt-dlp $COOKIE_FLAG --proxy "socks5://127.0.0.1:1080" --format "$FORMAT" $COMMON_FLAGS --extractor-args "youtube:player_client=android_vr" --user-agent "Mozilla/5.0 (Linux; Android 12; SM-S906N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36" "$URL";;
-        6) yt-dlp $COOKIE_FLAG --format "$FORMAT" $COMMON_FLAGS --extractor-args "youtube:player_client=web" --js-runtimes deno --remote-components ejs:github --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "$URL";;
-        7) yt-dlp $COOKIE_FLAG --format "$FORMAT" $COMMON_FLAGS --extractor-args "youtube:player_client=mweb" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "$URL";;
-        8) yt-dlp $COOKIE_FLAG --proxy "socks5://127.0.0.1:1080" --format "$FORMAT" $COMMON_FLAGS --extractor-args "youtube:player_client=android" --user-agent "Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36" "$URL";;
-        9) yt-dlp $COOKIE_FLAG --format "$FORMAT" $COMMON_FLAGS --extractor-args "youtube:player_client=web" --user-agent "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "$URL";;
-        10) yt-dlp $COOKIE_FLAG --proxy "socks5://127.0.0.1:1080" --format "$FORMAT" $COMMON_FLAGS --extractor-args "youtube:player_client=web" --geo-bypass --geo-bypass-country US --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "$URL";;
+        1) yt-dlp $COOKIE_FLAG --proxy "socks5://127.0.0.1:1080" \
+            --format "$FORMAT" $COMMON_FLAGS \
+            --extractor-args "youtube:player_client=android,web" \
+            --extractor-args "youtube:skip=webpage" \
+            --js-runtimes deno \
+            --remote-components ejs:github \
+            --user-agent "Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36" \
+            --add-header "Accept-Language:en-US,en;q=0.9" \
+            "$URL";;
+            
+        2) yt-dlp $COOKIE_FLAG --proxy "socks5://127.0.0.1:1080" \
+            --format "$FORMAT" $COMMON_FLAGS \
+            --extractor-args "youtube:player_client=ios" \
+            --js-runtimes deno \
+            --remote-components ejs:github \
+            --user-agent "com.google.ios.youtube/19.09.3 (iPhone14,3; U; CPU iOS 15_5 like Mac OS X)" \
+            --add-header "Accept-Language:en-US,en;q=0.9" \
+            "$URL";;
+            
+        3) yt-dlp $COOKIE_FLAG --proxy "socks5://127.0.0.1:1080" \
+            --format "$FORMAT" $COMMON_FLAGS \
+            --extractor-args "youtube:player_client=tv_embedded" \
+            --js-runtimes deno \
+            --remote-components ejs:github \
+            --user-agent "Mozilla/5.0 (ChromiumStylePlatform) AppleWebKit/605.1.15 (KHTML, like Gecko) GoogleChrome/125.0.0.0 Safari/605.1.15" \
+            "$URL";;
+            
+        4) yt-dlp $COOKIE_FLAG --proxy "socks5://127.0.0.1:1080" \
+            --format "$FORMAT" $COMMON_FLAGS \
+            --extractor-args "youtube:player_client=mweb" \
+            --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
+            "$URL";;
+            
+        5) yt-dlp $COOKIE_FLAG --proxy "socks5://127.0.0.1:1080" \
+            --format "$FORMAT" $COMMON_FLAGS \
+            --extractor-args "youtube:player_client=android_vr" \
+            --user-agent "Mozilla/5.0 (Linux; Android 12; SM-S906N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36" \
+            "$URL";;
+            
+        6) yt-dlp $COOKIE_FLAG --format "$FORMAT" $COMMON_FLAGS \
+            --extractor-args "youtube:player_client=web" \
+            --js-runtimes deno \
+            --remote-components ejs:github \
+            --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
+            "$URL";;
+            
+        7) yt-dlp $COOKIE_FLAG --format "$FORMAT" $COMMON_FLAGS \
+            --extractor-args "youtube:player_client=mweb" \
+            --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
+            "$URL";;
+            
+        8) yt-dlp $COOKIE_FLAG --proxy "socks5://127.0.0.1:1080" \
+            --format "$FORMAT" $COMMON_FLAGS \
+            --extractor-args "youtube:player_client=android" \
+            --user-agent "Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36" \
+            "$URL";;
+            
+        9) yt-dlp $COOKIE_FLAG --format "$FORMAT" $COMMON_FLAGS \
+            --extractor-args "youtube:player_client=web" \
+            --user-agent "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
+            "$URL";;
+            
+        10) yt-dlp $COOKIE_FLAG --proxy "socks5://127.0.0.1:1080" \
+            --format "$FORMAT" $COMMON_FLAGS \
+            --extractor-args "youtube:player_client=web" \
+            --geo-bypass \
+            --geo-bypass-country US \
+            --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
+            "$URL";;
     esac
 }
 
@@ -341,3 +404,7 @@ echo "REPO_OWNER_ENV=${REPO_OWNER_ENV}" > /tmp/env_vars.txt
 echo "REPO_NAME_ENV=${REPO_NAME_ENV}" >> /tmp/env_vars.txt
 echo "BRANCH_ENV=${BRANCH_ENV}" >> /tmp/env_vars.txt
 printf "%s\n" "${URL_LIST[@]}" > /tmp/yt_urls.txt
+
+echo "=========================================="
+echo "✅ YouTube download process completed!"
+echo "=========================================="
