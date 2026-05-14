@@ -1,4 +1,4 @@
-name: 01 - Maked By Ai-YT-uploadsenter
+name: 01 - Maked By Ai-YT-release
 
 on:
   workflow_dispatch:
@@ -31,14 +31,17 @@ on:
         default: ''
         type: string
 
+# ============ مهم: دسترسی‌های لازم برای ریلیز ============
 permissions:
   contents: write
+  # برای آپلود فایل در ریلیز نیاز است
 
 jobs:
   get-video:
     name: "📥 دانلود ویدیو"
     runs-on: ubuntu-latest
     timeout-minutes: 180
+    # این قسمت هم دسترسی را دوباره تأیید می‌کند
     permissions:
       contents: write
 
@@ -59,8 +62,14 @@ jobs:
       - name: Configure Git for Large Files
         run: |
           git config --global http.postBuffer 524288000
-          git config --global user.name "github-actions"
-          git config --global user.email "github-actions@github.com"
+          git config --global http.maxRequestBuffer 100M
+          git config --global core.compression 0
+          git config --global pack.windowMemory 256m
+          git config --global pack.packSizeLimit 100m
+          git config --global pack.threads 1
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          echo "Git configured for large file handling"
 
       - name: Setup YouTube Cookies
         run: |
@@ -87,10 +96,12 @@ jobs:
             caomingjun/warp
           echo "Waiting for WARP to initialize (20 seconds)..."
           sleep 20
+          echo "Checking WARP status..."
           for i in {1..8}; do
             RESULT=$(curl -s --max-time 5 --socks5-hostname 127.0.0.1:1080 https://cloudflare.com/cdn-cgi/trace 2>/dev/null || echo "failed")
             if echo "$RESULT" | grep -qE "warp=(on|plus)"; then
               echo "WARP is active!"
+              echo "$RESULT"
               break
             else
               echo "Attempt $i/8 - WARP not ready yet, waiting..."
@@ -106,6 +117,7 @@ jobs:
           export DENO_INSTALL="$HOME/.deno"
           export PATH="$DENO_INSTALL/bin:$PATH"
           echo "$DENO_INSTALL/bin" >> $GITHUB_PATH
+          deno --version
           pip3 install --upgrade yt-dlp
 
       - name: Download YouTube Video(s)
@@ -132,116 +144,84 @@ jobs:
           docker stop warp || true
           docker rm warp || true
 
-      # ============ قسمت جدید: آپلود به آپلودسنتر ============
+      # ============ قسمت جدید: آماده‌سازی فایل‌ها برای ریلیز ============
       
-      - name: Prepare files for upload
+      - name: Prepare files for Release
         run: |
-          echo "📦 Preparing files for upload to Uplod.ir..."
+          echo "📦 Preparing files for GitHub Release..."
           
           BACKUP_DIR=$(cat /tmp/backup_dir_path.txt)
           echo "Backup directory: $BACKUP_DIR"
           
-          # ایجاد پوشه برای آپلود
-          mkdir -p upload_files
+          # ایجاد پوشه برای فایل‌های رلیز
+          mkdir -p release_assets
           
-          # کپی فایل‌ها
+          # کپی تمام فایل‌های ویدیویی به پوشه رلیز
           if [ -d "$BACKUP_DIR" ]; then
             for video_dir in "$BACKUP_DIR"/*/; do
               if [ -d "$video_dir" ]; then
-                cp -r "$video_dir"/* upload_files/ 2>/dev/null || true
+                cp -r "$video_dir"/* release_assets/ 2>/dev/null || true
               fi
             done
-            echo "✅ Files copied to upload_files/"
+            echo "✅ Files copied to release_assets/"
+          else
+            echo "⚠️ No backup directory found"
           fi
           
-          # لیست فایل‌ها
+          # لیست فایل‌ها برای دیباگ
           echo "📋 Files to upload:"
-          ls -la upload_files/ || echo "No files found"
-          
-          # ایجاد فایل اطلاعاتی
-          echo "# 📥 لینک‌های دانلود از آپلودسنتر" > DOWNLOAD_LINKS.md
-          echo "" >> DOWNLOAD_LINKS.md
-          echo "**تاریخ:** $(date)" >> DOWNLOAD_LINKS.md
-          echo "**کیفیت:** ${{ github.event.inputs.quality }}" >> DOWNLOAD_LINKS.md
-          echo "" >> DOWNLOAD_LINKS.md
-          echo "---" >> DOWNLOAD_LINKS.md
-          echo "" >> DOWNLOAD_LINKS.md
+          ls -la release_assets/ || echo "No files found"
 
-      - name: Upload to Uplod.ir
+      # ============ ساخت ریلیز در گیت‌هاب ============
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: "📹 Videos - Run #${{ github.run_number }}"
+          tag_name: "videos-${{ github.run_number }}-${{ github.run_attempt }}"
+          body: |
+            ## 🎬 ویدیوهای دانلود شده
+            
+            | آیتم | مقدار |
+            |------|-------|
+            | **کیفیت** | `${{ github.event.inputs.quality }}` |
+            | **زیرنویس** | `${{ github.event.inputs.download_subtitles }}` |
+            | **تاریخ اجرا** | `${{ github.event.repository.updated_at }}` |
+            
+            ---
+            
+            ## 📥 راهنمای دانلود
+            
+            1. فایل‌های `*.z01`، `*.z02` و غیره را دانلود کنید
+            2. فایل اصلی `*.zip` را دانلود کنید
+            3. تمام فایل‌ها را در یک پوشه قرار دهید
+            4. فایل `*.zip` را Extract کنید
+            
+            > **توجه:** اگر رمز عبور تنظیم شده باشد، هنگام Extract از آن استفاده کنید.
+            
+            ---
+            *Created by [AVASAM](https://avasam.ir)*
+          files: |
+            release_assets/*
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # توجه: پارامتر make_latest حذف شد چون پشتیبانی نمی‌شود
+
+      # ============ پاکسازی فایل‌های موقت قدیمی (اختیاری) ============
+      
+      - name: Cleanup old releases (keep last 10)
+        if: always()
         run: |
-          echo "📤 Uploading files to Uplod.ir..."
-          
-          # آپلود هر فایل به صورت جداگانه
-          for file in upload_files/*; do
-            if [ -f "$file" ]; then
-              filename=$(basename "$file")
-              filesize=$(stat -c%s "$file")
-              filesize_mb=$(echo "scale=2; $filesize / 1024 / 1024" | bc)
-              
-              echo "=========================================="
-              echo "Uploading: $filename (${filesize_mb} MB)"
-              echo "=========================================="
-              
-              # آپلود به آپلودسنتر
-              response=$(curl -s -X POST \
-                -F "file=@$file" \
-                -H "Authorization: Bearer ${{ secrets.UPLODIR_API_KEY }}" \
-                "https://api.uplod.ir/v1/upload")
-              
-              echo "Response: $response"
-              
-              # استخراج لینک از پاسخ
-              download_url=$(echo "$response" | jq -r '.data.link // .link // .url // empty')
-              
-              if [ -n "$download_url" ] && [ "$download_url" != "null" ]; then
-                echo "✅ Upload successful!"
-                echo "🔗 Link: $download_url"
-                echo "- **$filename** (${filesize_mb} MB) → [دانلود]($download_url)" >> DOWNLOAD_LINKS.md
-              else
-                echo "❌ Upload failed for $filename"
-                echo "- **$filename** (${filesize_mb} MB) → ❌ آپلود ناموفق" >> DOWNLOAD_LINKS.md
+          echo "🧹 Cleaning up old releases..."
+          # لیست رلیزها و حذف رلیزهای قدیمی (به جز 10 تای آخر)
+          gh release list --limit 50 --json tagName --jq '.[].tagName' | while read tag; do
+            if [[ "$tag" == videos-* ]]; then
+              # شمارش رلیزهای ویدیویی
+              COUNT=$(gh release list --limit 100 | grep -c "videos-" || echo "0")
+              if [ "$COUNT" -gt 10 ]; then
+                echo "Deleting old release: $tag"
+                gh release delete "$tag" --yes || true
               fi
-              
-              echo ""
-              sleep 2  # تاخیر بین آپلودها
             fi
           done
-          
-          echo "" >> DOWNLOAD_LINKS.md
-          echo "---" >> DOWNLOAD_LINKS.md
-          echo "*Created by AVASAM*" >> DOWNLOAD_LINKS.md
-          
-          # نمایش لینک‌های نهایی
-          echo "=========================================="
-          echo "📋 Final Download Links:"
-          echo "=========================================="
-          cat DOWNLOAD_LINKS.md
-
-      - name: Save download links to repository
-        run: |
-          # ایجاد پوشه برای لینک‌ها
-          mkdir -p download_links
-          
-          # کپی فایل لینک‌ها با تاریخ
-          cp DOWNLOAD_LINKS.md "download_links/links_$(date +%Y%m%d_%H%M%S).md"
-          
-          # آپدیت README اصلی
-          cat > README_DOWNLOADS.md << 'EOF'
-          # 📥 لینک‌های دانلود ویدیوها
-          
-          آخرین ویدیوهای دانلود شده در اینجا قرار می‌گیرند.
-          
-          برای دانلود، روی لینک‌های زیر کلیک کنید:
-          
-          EOF
-          
-          cat DOWNLOAD_LINKS.md >> README_DOWNLOADS.md
-          
-          # commit و push
-          git add download_links/ README_DOWNLOADS.md
-          git commit -m "Add download links from Uplod.ir [skip ci]" || echo "No changes to commit"
-          git push origin main
-          
-          echo "=========================================="
-          echo "✅ Download links saved to repository!"
-          echo "=========================================="
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
