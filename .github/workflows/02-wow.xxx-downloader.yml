@@ -1,0 +1,95 @@
+# .github/workflows/02-wowxxx-downloader.yml
+name: 02 - 🔞 دانلود از Wow.xxx
+
+on:
+  workflow_dispatch:
+    inputs:
+      video_urls:
+        description: '🔗 لینک ویدیو Wow.xxx ( چند لینک با فاصله )'
+        required: true
+        type: string
+      quality:
+        description: '🎬 کیفیت و نوع'
+        required: false
+        default: 'best'
+        type: choice
+        options:
+          - best
+          - 1080
+          - 720
+          - 480
+      password:
+        description: '🔒 رمز ( اختیاری برای محافظت )'
+        required: false
+        default: ''
+        type: string
+
+jobs:
+  get-video:
+    name: "📥 دانلود از Wow.xxx"
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check URL provided
+        run: |
+          if [ -z "${{ github.event.inputs.video_urls }}" ]; then
+            echo "❌ No video URL provided!"
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Configure Git for Large Files
+        run: |
+          git config --global http.postBuffer 524288000
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+
+      - name: Setup Wow.xxx Cookies
+        run: |
+          if [ -n "${{ secrets.WOW_COOKIES }}" ]; then
+            echo "${{ secrets.WOW_COOKIES }}" | base64 -d > cookies.txt 2>/dev/null || echo "${{ secrets.WOW_COOKIES }}" > cookies.txt
+            echo "✅ Wow.xxx cookies loaded"
+          else
+            echo "⚠️ No cookies found for Wow.xxx"
+          fi
+
+      - name: Start WARP Container
+        run: |
+          docker run -d --name warp --restart=always -p 1080:1080 --cap-add NET_ADMIN caomingjun/warp
+          sleep 20
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pip ffmpeg zip p7zip-full curl jq bc unzip
+          pip3 install --upgrade yt-dlp
+
+      - name: Download Wow.xxx Video(s)
+        env:
+          SITE_TYPE: "wowxxx"
+          VIDEO_URLS: ${{ github.event.inputs.video_urls }}
+          VIDEO_QUALITY: ${{ github.event.inputs.quality }}
+          VIDEO_PASSWORD: ${{ github.event.inputs.password }}
+          REPO_OWNER_ENV: ${{ github.repository_owner }}
+          REPO_NAME_ENV: ${{ github.event.repository.name }}
+          BRANCH_ENV: ${{ github.ref_name }}
+        run: |
+          chmod +x .github/scripts/download_site.sh
+          .github/scripts/download_site.sh
+
+      - name: Stop WARP Container
+        if: always()
+        run: docker stop warp || true
+
+      - name: Incremental Commit & Push
+        run: |
+          chmod +x .github/scripts/push.sh
+          .github/scripts/push.sh
