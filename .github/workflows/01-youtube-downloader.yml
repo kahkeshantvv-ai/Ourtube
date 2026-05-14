@@ -123,8 +123,8 @@ jobs:
           REPO_NAME_ENV: ${{ github.event.repository.name }}
           BRANCH_ENV: ${{ github.ref_name }}
         run: |
-          chmod +x .github/scripts/download.sh
-          .github/scripts/download.sh
+          chmod +x .github/scripts/download_yt.sh
+          .github/scripts/download_yt.sh
 
       - name: Download Subtitles
         if: ${{ github.event.inputs.download_subtitles == 'true' }}
