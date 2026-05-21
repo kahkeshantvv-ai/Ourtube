@@ -1,0 +1,162 @@
+name: دانلودر یوتیوب
+
+
+on:
+  workflow_dispatch:
+    inputs:
+      video_url:
+        description: 'YouTube video URL'
+        required: true
+        type: string
+      output_format:
+        description: 'Output type'
+        required: true
+        type: choice
+        options:
+          - mp4 (video)
+          - mp3 (audio only)
+        default: 'mp4 (video)'
+      desired_quality:
+        description: 'Quality preset (video: 144p|360p|480p|720p|1080p; audio: 64|128|192|320kbps)'
+        required: false
+        type: string
+        default: '720p'
+      max_part_mb:
+        description: 'Maximum part size in MB (0 = do not split)'
+        required: false
+        type: number
+        default: 90
+      output_folder:
+        description: 'Folder to store downloaded file and archives (relative to repo root)'
+        required: false
+        type: string
+        default: 'downloads'
+
+jobs:
+  fetch-and-store:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y zip curl jq python3
+
+      - name: Retrieve media file
+        id: retrieval
+        run: |
+          python3 << 'EOF'
+          import os, sys, time, re, requests
+          
+          URL = os.environ.get('INPUT_URL')
+          FMT = os.environ.get('INPUT_FORMAT') 
+          QUAL = os.environ.get('INPUT_QUALITY')
+          OUT_DIR = os.environ.get('INPUT_OUTPUT_FOLDER')
+          
+          # Normalise quality string
+          if FMT == 'mp3':
+              if QUAL not in ('64kbps','128kbps','192kbps','320kbps'):
+                  QUAL = '192kbps'
+          else:
+              if QUAL not in ('144p','360p','480p','720p','1080p'):
+                  QUAL = '720p'
+          
+          # Build the conversion request
+          pl = {
+              "url": URL,
+              "os": "linux",
+              "output": {"type": "audio" if FMT=="mp3" else "video", "format": FMT},
+          }
+          if FMT == 'mp3':
+              pl["audio"] = {"bitrate": QUAL}
+          else:
+              pl["output"]["quality"] = QUAL
+          
+          s = requests.Session()
+          s.headers.update({"User-Agent": "Mozilla/5.0", "Content-Type": "application/json"})
+          s.get("https://media.ytmp3.gg/")
+          
+          resp = s.post("https://hub.ytconvert.org/api/download", json=pl, timeout=30)
+          resp.raise_for_status()
+          d = resp.json()
+          
+          status_url = d.get('statusUrl')
+          title = d.get('title', 'unknown')
+          
+          # Wait for it to become ready
+          dl = None
+          for _ in range(90):
+              time.sleep(2)
+              sr = s.get(status_url, timeout=15)
+              sd = sr.json()
+              if sd.get('status') == 'completed':
+                  dl = sd.get('downloadUrl')
+                  break
+              if sd.get('status') == 'failed':
+                  sys.exit(1)
+          
+          if not dl:
+              sys.exit(1)
+          
+          # Build a safe file name
+          v_id = (re.search(r'(?:v=|\/)([a-zA-Z0-9_-]{11})', URL) or ['', 'unknown'])[1]
+          clean_title = re.sub(r'[^a-zA-Z0-9\-_]', '_', title.replace(' ','_'))[:60].strip('_') or v_id
+          fname = f"{clean_title}_{v_id}_{QUAL}.{FMT}"
+          
+          # Save information for the next steps
+          out_dir = OUT_DIR
+          os.makedirs(out_dir, exist_ok=True)
+          with open(os.path.join(out_dir, ".download_info"), "w") as df:
+              df.write(f"{dl}\n{fname}\n{FMT}\n{QUAL}")
+          print(f"Ready: {fname}")
+          EOF
+        env:
+          INPUT_URL: ${{ github.event.inputs.video_url }}
+          INPUT_FORMAT: ${{ github.event.inputs.output_format == 'mp3 (audio only)' && 'mp3' || 'mp4' }}
+          INPUT_QUALITY: ${{ github.event.inputs.desired_quality }}
+          INPUT_OUTPUT_FOLDER: ${{ github.event.inputs.output_folder }}
+
+      - name: Download binary
+        run: |
+          OUTPUT_FOLDER="${{ github.event.inputs.output_folder }}"
+          INFO="$OUTPUT_FOLDER/.download_info"
+          DL_URL=$(head -1 "$INFO")
+          FILE_NAME=$(sed -n '2p' "$INFO")
+          mkdir -p $OUTPUT_FOLDER/parts
+          curl -sL -o "$OUTPUT_FOLDER/parts/$FILE_NAME" "$DL_URL"
+          echo "Downloaded $FILE_NAME"
+
+      - name: Split oversized files (optional)
+        run: |
+          OUTPUT_FOLDER="${{ github.event.inputs.output_folder }}"
+          THRESH_MB=${{ github.event.inputs.max_part_mb }}
+          THRESH_BYTES=$((THRESH_MB * 1024 * 1024))
+          cd "$OUTPUT_FOLDER/parts"
+          for f in *; do
+            if [ -f "$f" ]; then
+              fs=$(stat -c%s "$f")
+              if [ "$THRESH_BYTES" -gt 0 ] && [ "$fs" -gt "$THRESH_BYTES" ]; then
+                zip -r -s "${THRESH_MB}m" "../${f}.zip" "$f"
+                rm "$f"
+              else
+                mv "$f" ..
+              fi
+            fi
+          done
+          cd ../..
+          rm -rf "$OUTPUT_FOLDER/parts" "$OUTPUT_FOLDER/.download_info"
+
+      - name: Push changes to repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "${{ github.event.inputs.output_folder }}/"
+          git commit -m "Download YouTube media [skip ci]" || echo "Nothing to commit"
+          git push
